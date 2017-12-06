@@ -1,6 +1,6 @@
 """
 Created on Fri Dec 6 21:46:23 2017
-@author: avrahami
+@author: avrahami & Bolless
 """
 # use python 3.6 for running. Most have tensorflow installed
 
