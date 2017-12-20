@@ -25,7 +25,7 @@ def readucr(filename):
 
 # should be much higher, something like 5000
 nb_epochs = 100
-
+multivariate = False
 # flist = ['Adiac', 'Beef', 'CBF', 'ChlorineConcentration', 'CinC_ECG_torso', 'Coffee', 'Cricket_X', 'Cricket_Y', 'Cricket_Z',
 # 'DiatomSizeReduction', 'ECGFiveDays', 'FaceAll', 'FaceFour', 'FacesUCR', '50words', 'FISH', 'Gun_Point', 'Haptics',
 # 'InlineSkate', 'ItalyPowerDemand', 'Lighting2', 'Lighting7', 'MALLAT', 'MedicalImages', 'MoteStrain', 'NonInvasiveFatalECG_Thorax1',
@@ -34,8 +34,8 @@ nb_epochs = 100
 
 data_location = 'C:\\Users\\abrahami\\Documents\\Private\\Uni\\BGU\\time_series\\project\\data'
 flist = ['NonInvasiveFatalECG_Thorax1']
-for each in flist:
-    fname = each
+if not multivariate:
+    fname = flist[0]
     x_train, y_train = readucr(data_location + '\\' + fname + '_TRAIN')
     x_test, y_test = readucr(data_location + '\\' + fname + '_TEST')
     nb_classes = len(np.unique(y_test))
@@ -59,7 +59,7 @@ for each in flist:
     # x_train = x_train.reshape(x_train.shape + (1,))
     # x_test = x_test.reshape(x_test.shape + (1,))
 
-    x = Input(x_train.shape[1:])
+    x = Input(shape=x_train.shape[1:])
     y = Dropout(0.1)(x)
     y = Dense(500, activation='relu')(x)
     y = Dropout(0.2)(y)
