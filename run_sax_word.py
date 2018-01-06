@@ -136,7 +136,7 @@ def display_scores(vectorizer, tfidf_result):
         print("{0:50} Score: {1}".format(item[0], item[1]))
 
 
-data_location = 'D:\\Uni\\time analysis\\project\\NonInvasiveFatalECG_Thorax1'
+data_location = 'C:\\Users\\abrahami\\Documents\\Private\\Uni\\BGU\\time_series\\project\\data'
 flist = ['NonInvasiveFatalECG_Thorax1']
 sax = pysax.SAXModel(window=20, stride=5, nbins=5, alphabet="ABCD")
 for each in flist:
