@@ -82,66 +82,12 @@ def sax_data_prep(x_train, x_test, sax_obj=pysax.SAXModel(window=20, stride=5, n
 
 
 def run_algo(dataset, ephocs=100, with_sax=False):
-    if dataset == 'trading_data':
-        data_original = pd.read_csv(data_location + "\\multivariate_example_data.csv")[::-1]
-        openp = data_original.ix[:, 'Open'].tolist()
-        highp = data_original.ix[:, 'High'].tolist()
-        lowp = data_original.ix[:, 'Low'].tolist()
-        closep = data_original.ix[:, 'Adj Close'].tolist()
-        volumep = data_original.ix[:, 'Volume'].tolist()
-
-        window = 30
-        emb_size = 5
-        step = 1
-        forecast = 1
-
-        X, Y = [], []
-        for i in range(0, len(data_original), step):
-            try:
-                o = openp[i:i+window]
-                h = highp[i:i+window]
-                l = lowp[i:i+window]
-                c = closep[i:i+window]
-                v = volumep[i:i+window]
-
-                o = (np.array(o) - np.mean(o)) / np.std(o)
-                h = (np.array(h) - np.mean(h)) / np.std(h)
-                l = (np.array(l) - np.mean(l)) / np.std(l)
-                c = (np.array(c) - np.mean(c)) / np.std(c)
-                v = (np.array(v) - np.mean(v)) / np.std(v)
-
-                x_i = closep[i:i+window]
-                y_i = closep[i+window+forecast]
-
-                last_close = x_i[-1]
-                next_close = y_i
-
-                if last_close < next_close:
-                    y_i = [1, 0]
-                else:
-                    y_i = [0, 1]
-
-                x_i = np.column_stack((o, h, l, c, v))
-
-            except Exception as e:
-                break
-
-            X.append(x_i)
-            Y.append(y_i)
-
-        X, Y = np.array(X), np.array(Y)
-        x_train, x_test, y_train_array, y_test_array = create_Xt_Yt(X, Y)
-
-        x_train_array = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], emb_size))
-        x_test_array = np.reshape(x_test, (x_test.shape[0], x_test.shape[1], emb_size))
-        categories_dim = len(y_train_array[0])
-
-    elif dataset == "ECG":
+    x_train_combined = list()
+    x_test_combined = list()
+    y_train_combined = list()
+    y_test_combined = list()
+    if dataset == "ECG":
         flist = ['NonInvasiveFatalECG_Thorax1', 'NonInvasiveFatalECG_Thorax2']
-        x_train_combined = list()
-        x_test_combined = list()
-        y_train_combined = list()
-        y_test_combined = list()
         for idx, fname in enumerate(flist):
             x_train, y_train = readucr(data_location + '\\' + fname + '_TRAIN')
             x_test, y_test = readucr(data_location + '\\' + fname + '_TEST')
@@ -187,12 +133,8 @@ def run_algo(dataset, ephocs=100, with_sax=False):
         # emb_size in this case is the # of dimensions (length of flist)
         emb_size = len(x_train_array[0][0])
 
-    elif dataset == "ECG":
-        flist = ['NonInvasiveFatalECG_Thorax1', 'NonInvasiveFatalECG_Thorax2']
-        x_train_combined = list()
-        x_test_combined = list()
-        y_train_combined = list()
-        y_test_combined = list()
+    elif dataset == "WaveGesture":
+        flist = ['uWaveGestureLibrary_X', 'uWaveGestureLibrary_Y', 'uWaveGestureLibrary_Z']
         for idx, fname in enumerate(flist):
             x_train, y_train = readucr(data_location + '\\' + fname + '_TRAIN')
             x_test, y_test = readucr(data_location + '\\' + fname + '_TEST')
@@ -294,7 +236,7 @@ def run_algo(dataset, ephocs=100, with_sax=False):
 
 if __name__ == '__main__':
     # should be one out of the two
-    dataset = "ECG"#"trading_data"
-    ephocs = 100
+    dataset = "WaveGesture"#"ECG"
+    ephocs = 1000
     data_location = "C:\\Users\\abrahami\\Documents\\Private\\Uni\\BGU\\time_series\\project\\data"
-    run_algo(dataset=dataset, ephocs=ephocs, with_sax=False)
+    run_algo(dataset=dataset, ephocs=ephocs, with_sax=True)
