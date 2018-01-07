@@ -12,6 +12,9 @@ from keras.layers.advanced_activations import *
 from keras.optimizers import Nadam
 from keras.initializers import *
 from sklearn.metrics import confusion_matrix
+import sax_word as pysax
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.decomposition import TruncatedSVD
 
 # general functions created in Rachnog's git
 def shuffle_in_unison(a, b):
@@ -53,72 +56,51 @@ def readucr(filename):
     X = data[:, 1:]
     return X, Y
 
+def sax_data_prep(x_train, x_test, sax_obj=pysax.SAXModel(window=20, stride=5, nbins=5, alphabet="ABCD")):
+    tfidf_obj = TfidfVectorizer(norm='l2', min_df=0, use_idf=True, smooth_idf=False, sublinear_tf=True)
+    svd_obj = TruncatedSVD(n_components=1)
+    train_sax_representation = []
 
-def run_algo(dataset, ephocs=100):
-    if dataset == 'trading_data':
-        data_original = pd.read_csv(data_location + "\\multivariate_example_data.csv")[::-1]
-        openp = data_original.ix[:, 'Open'].tolist()
-        highp = data_original.ix[:, 'High'].tolist()
-        lowp = data_original.ix[:, 'Low'].tolist()
-        closep = data_original.ix[:, 'Adj Close'].tolist()
-        volumep = data_original.ix[:, 'Volume'].tolist()
+    for x in x_train:
+        symbols = sax_obj.symbolize_signal(x)
+        train_sax_representation.append(' '.join(symbols))
+    test_sax_representation = []
+    for x in x_test:
+        symbols = sax_obj.symbolize_signal(x)
+        test_sax_representation.append(' '.join(symbols))
 
-        window = 30
-        emb_size = 5
-        step = 1
-        forecast = 1
+    train_tfidf = tfidf_obj.fit_transform(train_sax_representation)
+    train_svd = svd_obj.fit_transform(train_tfidf)
+    test_tfidf = tfidf_obj.transform(test_sax_representation)
+    test_svd = svd_obj.transform(test_tfidf)
+    # converting the single svd value to the format we will use in the NN
+    train_svd_duplicated_list = [train_svd for x in range(x_train.shape[1])]
+    train_svd_duplicated_array = np.array(train_svd_duplicated_list).squeeze().transpose()
+    test_svd_duplicated_list = [test_svd for x in range(x_test.shape[1])]
+    test_svd_duplicated_array = np.array(test_svd_duplicated_list).squeeze().transpose()
+    return train_svd_duplicated_array, test_svd_duplicated_array
 
-        X, Y = [], []
-        for i in range(0, len(data_original), step):
-            try:
-                o = openp[i:i+window]
-                h = highp[i:i+window]
-                l = lowp[i:i+window]
-                c = closep[i:i+window]
-                v = volumep[i:i+window]
 
-                o = (np.array(o) - np.mean(o)) / np.std(o)
-                h = (np.array(h) - np.mean(h)) / np.std(h)
-                l = (np.array(l) - np.mean(l)) / np.std(l)
-                c = (np.array(c) - np.mean(c)) / np.std(c)
-                v = (np.array(v) - np.mean(v)) / np.std(v)
-
-                x_i = closep[i:i+window]
-                y_i = closep[i+window+forecast]
-
-                last_close = x_i[-1]
-                next_close = y_i
-
-                if last_close < next_close:
-                    y_i = [1, 0]
-                else:
-                    y_i = [0, 1]
-
-                x_i = np.column_stack((o, h, l, c, v))
-
-            except Exception as e:
-                break
-
-            X.append(x_i)
-            Y.append(y_i)
-
-        X, Y = np.array(X), np.array(Y)
-        x_train, x_test, y_train_array, y_test_array = create_Xt_Yt(X, Y)
-
-        x_train_array = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], emb_size))
-        x_test_array = np.reshape(x_test, (x_test.shape[0], x_test.shape[1], emb_size))
-        categories_dim = len(y_train_array[0])
-
-    elif dataset == "ECG":
+def run_algo(dataset, ephocs=100, with_sax=False):
+    x_train_combined = list()
+    x_test_combined = list()
+    y_train_combined = list()
+    y_test_combined = list()
+    if dataset == "ECG":
         flist = ['NonInvasiveFatalECG_Thorax1', 'NonInvasiveFatalECG_Thorax2']
-        x_train_combined = list()
-        x_test_combined = list()
-        y_train_combined = list()
-        y_test_combined = list()
         for idx, fname in enumerate(flist):
             x_train, y_train = readucr(data_location + '\\' + fname + '_TRAIN')
             x_test, y_test = readucr(data_location + '\\' + fname + '_TEST')
             nb_classes = len(np.unique(y_test))
+
+            '''
+            # under-sampling, only for debugging purposes!!!!!
+            x_train = x_train[0:300]
+            y_train = y_train[0:300]
+            x_test = x_test[0:200]
+            y_test = y_test[0:200]
+            nb_classes = len(np.unique(y_test))
+            '''
 
             # normalization
             y_train = (y_train - y_train.min()) / (y_train.max() - y_train.min()) * (nb_classes - 1)
@@ -128,11 +110,17 @@ def run_algo(dataset, ephocs=100):
             x_train = (x_train - x_train_mean) / (x_train_std)
             x_test = (x_test - x_train_mean) / (x_train_std)
 
-            # need to add elements to the exiting lists of data-frames
             x_train_combined.append(x_train)
             y_train_combined.append(y_train)
             x_test_combined.append(x_test)
             y_test_combined.append(y_test)
+            # SAX words usage (Bolless code in some way) - if needed
+            if with_sax:
+                sax_obj = pysax.SAXModel(window=20, stride=5, nbins=5, alphabet="ABCD")
+                train_svd, test_svd = sax_data_prep(sax_obj=sax_obj, x_train=x_train, x_test=x_test)
+                # need to add elements to the exiting lists of data-frames
+                x_train_combined.append(train_svd)
+                x_test_combined.append(test_svd)
 
         x_train_array = np.dstack(tuple(x_train_combined))
         x_test_array = np.dstack(tuple(x_test_combined))
@@ -144,6 +132,52 @@ def run_algo(dataset, ephocs=100):
         window = len(x_train_array[0])
         # emb_size in this case is the # of dimensions (length of flist)
         emb_size = len(x_train_array[0][0])
+
+    elif dataset == "WaveGesture":
+        flist = ['uWaveGestureLibrary_X', 'uWaveGestureLibrary_Y', 'uWaveGestureLibrary_Z']
+        for idx, fname in enumerate(flist):
+            x_train, y_train = readucr(data_location + '\\' + fname + '_TRAIN')
+            x_test, y_test = readucr(data_location + '\\' + fname + '_TEST')
+            nb_classes = len(np.unique(y_test))
+
+            # under-sampling, only for debugging purposes!!!!!
+            x_train = x_train[0:300]
+            y_train = y_train[0:300]
+            x_test = x_test[0:200]
+            y_test = y_test[0:200]
+            nb_classes = len(np.unique(y_test))
+
+            # normalization
+            y_train = (y_train - y_train.min()) / (y_train.max() - y_train.min()) * (nb_classes - 1)
+            y_test = (y_test - y_test.min()) / (y_test.max() - y_test.min()) * (nb_classes - 1)
+            x_train_mean = x_train.mean()
+            x_train_std = x_train.std()
+            x_train = (x_train - x_train_mean) / (x_train_std)
+            x_test = (x_test - x_train_mean) / (x_train_std)
+
+            x_train_combined.append(x_train)
+            y_train_combined.append(y_train)
+            x_test_combined.append(x_test)
+            y_test_combined.append(y_test)
+            # SAX words usage (Bolless code in some way) - if needed
+            if with_sax:
+                sax_obj = pysax.SAXModel(window=20, stride=5, nbins=5, alphabet="ABCD")
+                train_svd, test_svd = sax_data_prep(sax_obj=sax_obj, x_train=x_train, x_test=x_test)
+                # need to add elements to the exiting lists of data-frames
+                x_train_combined.append(train_svd)
+                x_test_combined.append(test_svd)
+
+        x_train_array = np.dstack(tuple(x_train_combined))
+        x_test_array = np.dstack(tuple(x_test_combined))
+        y_train_array = to_categorical(y_train_combined[0])
+        y_test_array = to_categorical(y_test_combined[0])
+
+        categories_dim = len(y_train_array[0])
+        # window in this case is the # of features used for each instance
+        window = len(x_train_array[0])
+        # emb_size in this case is the # of dimensions (length of flist)
+        emb_size = len(x_train_array[0][0])
+
     else:
         print("such data is not supported. Try either 'ECG' or 'trading_data'")
         return -1
@@ -202,7 +236,7 @@ def run_algo(dataset, ephocs=100):
 
 if __name__ == '__main__':
     # should be one out of the two
-    dataset = "ECG"#"trading_data"
-    ephocs = 100
+    dataset = "WaveGesture"#"ECG"
+    ephocs = 1000
     data_location = "C:\\Users\\abrahami\\Documents\\Private\\Uni\\BGU\\time_series\\project\\data"
-    run_algo(dataset=dataset, ephocs=ephocs)
+    run_algo(dataset=dataset, ephocs=ephocs, with_sax=True)

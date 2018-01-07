@@ -93,4 +93,4 @@ if not multivariate:
     test_prediction = np.apply_along_axis(func1d=np.argmax, axis=1, arr=test_proba_prediction)
     conf_matrix = confusion_matrix(y_true=y_test.astype(int), y_pred=test_prediction.astype(int))
     error_rate = 1-np.trace(conf_matrix)*1.0/conf_matrix.sum()*1.0
-    print("Error rate of current run is {}". format(error_rate))
+    print("\nError rate of current run is {}". format(error_rate))
