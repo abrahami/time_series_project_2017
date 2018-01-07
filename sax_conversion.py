@@ -32,7 +32,7 @@ multivariate = False
 # 'NonInvasiveFatalECG_Thorax2', 'OliveOil', 'OSULeaf', 'SonyAIBORobotSurface', 'SonyAIBORobotSurfaceII', 'StarLightCurves', 'SwedishLeaf', 'Symbols',
 # 'synthetic_control', 'Trace', 'TwoLeadECG', 'Two_Patterns', 'uWaveGestureLibrary_X', 'uWaveGestureLibrary_Y', 'uWaveGestureLibrary_Z', 'wafer', 'WordsSynonyms', 'yoga']
 
-data_location = 'C:\\Users\\abrahami\\Documents\\Private\\Uni\\BGU\\time_series\\project\\data'
+data_location = 'C:\\Users\\ebolless\\Documents\\TSC_project\\NonInvasiveFatalECG_Thorax1'
 flist = ['NonInvasiveFatalECG_Thorax1']
 if not multivariate:
     fname = flist[0]
@@ -69,7 +69,7 @@ if not multivariate:
     y = Dropout(0.3)(y)
     out = Dense(nb_classes, activation='softmax')(y)
 
-    model = Model(input=x, output=out)
+    model = Model(inputs=x, outputs=out)
 
     optimizer = keras.optimizers.Adadelta()
     model.compile(loss='categorical_crossentropy',
@@ -80,7 +80,7 @@ if not multivariate:
                                   patience=200, min_lr=0.1)
 
     # a bit strange why is the x_test and y_test being used at all????
-    hist = model.fit(x_train, Y_train, batch_size=batch_size, nb_epoch=nb_epochs,
+    hist = model.fit(x_train, Y_train, batch_size=batch_size, epochs=nb_epochs,
                      verbose=1, validation_data=(x_test, Y_test),
                      # callbacks = [TestCallback((x_train, Y_train)), reduce_lr, keras.callbacks.TensorBoard(log_dir='./log'+fname, histogram_freq=1)])
                      callbacks=[reduce_lr])

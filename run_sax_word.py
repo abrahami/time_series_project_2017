@@ -1,4 +1,4 @@
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 from collections import Counter
 import sax_word as pysax
@@ -136,14 +136,27 @@ def display_scores(vectorizer, tfidf_result):
         print("{0:50} Score: {1}".format(item[0], item[1]))
 
 
-data_location = 'D:\\Uni\\time analysis\\project\\NonInvasiveFatalECG_Thorax1'
-flist = ['NonInvasiveFatalECG_Thorax1']
-sax = pysax.SAXModel(window=20, stride=5, nbins=5, alphabet="ABCD")
+
+
+
+data_location = 'C:\\Users\\ebolless\\Documents\\TSC_project\\data'
+flist = ['NonInvasiveFatalECG_Thorax1','NonInvasiveFatalECG_Thorax2']
+sax = pysax.SAXModel(window=65, stride=5, nbins=25, alphabet="ABCDEFG")
 for each in flist:
     fname = each
     x_train, y_train = readucr(data_location + '\\' + fname + '_TRAIN')
     x_test, y_test = readucr(data_location + '\\' + fname + '_TEST')
     nb_classes = len(np.unique(y_test))
+
+    x_train_mean = x_train.mean()
+    x_train_std = x_train.std()
+    x_train = (x_train - x_train_mean) / (x_train_std)
+
+    # x_test_min = np.min(x_test, axis = 1, keepdims=1)
+    # x_test_max = np.max(x_test, axis = 1, keepdims=1)
+    x_test = (x_test - x_train_mean) / (x_train_std)
+
+
 
     all_documents = [[] for _ in range(nb_classes)]
     i = 0
@@ -158,6 +171,9 @@ for each in flist:
         documents.append(' '.join(doc))
     with open('train', 'wb') as fp:
         pickle.dump(documents, fp)
+#    with open('train_docs', 'wb') as fp:
+#        pickle.dump(all_documents, fp)
+
 
     with open('train', 'rb') as fp:
         documents = pickle.load(fp)
@@ -169,24 +185,24 @@ for each in flist:
     with open('test', 'wb') as fp:
         pickle.dump(all_documents_test, fp)
 
-    with open('test', 'rb') as fp:
-        all_documents_test = pickle.load(fp)
 
-
+'''
 
     sklearn_tfidf = TfidfVectorizer(norm='l2',min_df=0, use_idf=True, smooth_idf=False, sublinear_tf=True)#, tokenizer=tokenize)
     sklearn_representation = sklearn_tfidf.fit_transform(documents)
-    display_scores(sklearn_tfidf,sklearn_representation)
+    display_scores(sklearn_tfidf, sklearn_representation)
 
     cosine_similarities = linear_kernel(sklearn_representation[0:1], sklearn_representation).flatten()
     print(cosine_similarities)
     print(sklearn_representation[0:1])
-
-    ''' deal with new document '''
+'''
+########deal with new document
+'''
     response = sklearn_tfidf.transform(all_documents_test)
     cosine_similarities = linear_kernel(response[0], sklearn_representation).flatten()
     related_docs_indices = cosine_similarities.argsort()[:-1]
     print(related_docs_indices)
+'''
 '''
 
     #print(sklearn_representation)
