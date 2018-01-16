@@ -15,6 +15,8 @@ from sklearn.metrics import confusion_matrix, f1_score
 import sax_word as pysax
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.decomposition import TruncatedSVD
+import csv
+from datetime import datetime
 
 
 # general functions created in Rachnog's git
@@ -114,7 +116,7 @@ def sax_data_prep(x_train, x_test, sax_obj=pysax.SAXModel(window=20, stride=5, n
     return train_svd_duplicated_array, test_svd_duplicated_array
 
 
-def run_algo(dataset, ephocs=100, with_sax=False):
+def cnn_data_prep(dataset, with_sax):
     x_train_combined = list()
     x_test_combined = list()
     y_train_combined = list()
@@ -160,12 +162,6 @@ def run_algo(dataset, ephocs=100, with_sax=False):
         y_train_array = to_categorical(y_train_combined[0])
         y_test_array = to_categorical(y_test_combined[0])
 
-        categories_dim = len(y_train_array[0])
-        # window in this case is the # of features used for each instance
-        window = len(x_train_array[0])
-        # emb_size in this case is the # of dimensions (length of flist)
-        emb_size = len(x_train_array[0][0])
-
     elif dataset == "WaveGesture":
         flist = ['uWaveGestureLibrary_X', 'uWaveGestureLibrary_Y', 'uWaveGestureLibrary_Z']
         for idx, fname in enumerate(flist):
@@ -207,69 +203,115 @@ def run_algo(dataset, ephocs=100, with_sax=False):
         y_train_array = to_categorical(y_train_combined[0])
         y_test_array = to_categorical(y_test_combined[0])
 
-        categories_dim = len(y_train_array[0])
-        # window in this case is the # of features used for each instance
-        window = len(x_train_array[0])
-        # emb_size in this case is the # of dimensions (length of flist)
-        emb_size = len(x_train_array[0][0])
-
     else:
         print("such data is not supported. Try either 'ECG' or 'trading_data'")
         return -1
+    return {"x_train": x_train_array, "x_test": x_test_array, "y_train": y_train_array, "y_test": y_test_array}
+
+
+def run_algo(data, ephocs=100, filters_init_value=32, kernel_size=4, drop_out=0.5,
+             dense_layer_size=64, lr=0.002, conv_layers=2):
+    x_train_array = data["x_train"]
+    x_test_array = data["x_test"]
+    y_train_array = data["y_train"]
+    y_test_array = data["y_test"]
+    categories_dim = len(y_train_array[0])
+    # window in this case is the # of features used for each instance
+    window = len(x_train_array[0])
+    # emb_size in this case is the # of dimensions (length of flist)
+    emb_size = len(x_train_array[0][0])
+
     # model building
     model = Sequential()
-    model.add(Conv1D(input_shape=(window, emb_size), filters=16, kernel_size=4, padding='same'))
+    model.add(Conv1D(input_shape=(window, emb_size), filters=filters_init_value,
+                     kernel_size=kernel_size, padding='same'))
     model.add(BatchNormalization())
     model.add(LeakyReLU())
     model.add(Dropout(0.5))
 
-    model.add(Conv1D(filters=8, kernel_size=4, padding='same'))
-    model.add(BatchNormalization())
-    model.add(LeakyReLU())
-    model.add(Dropout(0.5))
+    # adding the convenotional layers
+    for i in range(conv_layers):
+        model.add(Conv1D(filters=int(filters_init_value/(2*(i+1))), kernel_size=kernel_size, padding='same'))
+        model.add(BatchNormalization())
+        model.add(LeakyReLU())
+        model.add(Dropout(drop_out))
 
     model.add(Flatten())
-
-    model.add(Dense(64))
+    model.add(Dense(dense_layer_size))
     model.add(BatchNormalization())
     model.add(LeakyReLU())
 
     model.add(Dense(categories_dim))
     model.add(Activation('softmax'))
 
-    opt = Nadam(lr=0.002)
-
-    reduce_lr = ReduceLROnPlateau(monitor='val_acc', factor=0.9, patience=30, min_lr=0.000001, verbose=1)
-    checkpointer = ModelCheckpoint(filepath="lolkek.hdf5", verbose=1, save_best_only=True)
+    opt = Nadam(lr=lr)
+    reduce_lr = ReduceLROnPlateau(monitor='val_acc', factor=0.9, patience=30, min_lr=0.000001, verbose=0)
+    checkpointer = ModelCheckpoint(filepath="lolkek.hdf5", verbose=0, save_best_only=True)
 
     model.compile(optimizer=opt,
                   loss='categorical_crossentropy',
                   metrics=['accuracy'])
 
-    history = model.fit(x_train_array, y_train_array, nb_epoch=ephocs, batch_size=128, verbose=1,
+    history = model.fit(x_train_array, y_train_array, epochs=ephocs, batch_size=128, verbose=0,
                         validation_data=(x_test_array, y_test_array),
                         callbacks=[reduce_lr, checkpointer], shuffle=True)
 
     # Print the testing results which has the lowest training loss.
     log = pd.DataFrame(history.history)
-    print(log.loc[log['loss'].idxmin]['loss'], log.loc[log['loss'].idxmin]['val_acc'])
+    #print(log.loc[log['loss'].idxmin]['loss'], log.loc[log['loss'].idxmin]['val_acc'])
 
     # train prediction
-    train_proba_prediction = model.predict(x=x_train_array, batch_size=128, verbose=1)
+    train_proba_prediction = model.predict(x=x_train_array, batch_size=128, verbose=0)
     train_prediction = np.apply_along_axis(func1d=np.argmax, axis=1, arr=train_proba_prediction)
     y_train_flatten = np.array([idx for i in y_train_array for idx, j in enumerate(list(i)) if j])
     train_res = evaluate_model(true_values=y_train_flatten, predicted_values=train_prediction, verbose=False)
     print("\nError rate of current run over train data is {}".format(train_res))
 
-    test_proba_prediction = model.predict(x=x_test_array, batch_size=128, verbose=1)
+    test_proba_prediction = model.predict(x=x_test_array, batch_size=128, verbose=0)
     test_prediction = np.apply_along_axis(func1d=np.argmax, axis=1, arr=test_proba_prediction)
     y_test_flatten = np.array([idx for i in y_test_array for idx, j in enumerate(list(i)) if j])
     test_res = evaluate_model(true_values=y_test_flatten, predicted_values=test_prediction, verbose=False)
     print("\nError rate of current run over test data is {}".format(test_res))
+    return train_res, test_res
 
+
+def run_algo_loop(res_file, data, epochs, filters_init_value, kernel_size, drop_out, dense_layer_size, lr, layers):
+    idx = 0
+    for ep in epochs:
+        for fil in filters_init_value:
+            for ker in kernel_size:
+                for drop in drop_out:
+                    for dense in dense_layer_size:
+                        for learning_rate in lr:
+                            for lay in layers:
+                                start_time = datetime.now()
+                                train_res, test_res = run_algo(data=data, ephocs=ep, filters_init_value=fil,
+                                                               kernel_size=ker, drop_out=drop, dense_layer_size=dense,
+                                                               lr=learning_rate, conv_layers=lay)
+                                duration = (datetime.now() - start_time).seconds
+                                cur_full_log = [idx, duration, ep, fil, ker, drop, dense, learning_rate, lay,
+                                                train_res['acc_measure'], train_res['f1_measure'],
+                                                test_res['acc_measure'], test_res['f1_measure']]
+                                writer = csv.writer(open(res_file, "a"), lineterminator='\n', dialect='excel')
+                                writer.writerow(cur_full_log)
+                                del writer
+                                idx+=1
 if __name__ == '__main__':
     # should be one out of the two
-    dataset = "WaveGesture"#"ECG"
+    dataset = "ECG"#"WaveGesture"
     ephocs = 10
     data_location = "C:\\Users\\abrahami\\Documents\\Private\\Uni\\BGU\\time_series\\project\\data"
-    run_algo(dataset=dataset, ephocs=ephocs, with_sax=False)
+    res_file = "C:\\Users\\abrahami\\Documents\\Private\\Uni\\BGU\\time_series\\project\\time_series_auto_res3.csv"
+    epochs = [100, 1000]
+    filters_init_value = [64, 32]
+    kernel_size = [4, 8]
+    drop_out = [0.2, 0.5]
+    dense_layer_size = [64]
+    lr = [0.001, 0.002]
+    layers = [2, 3, 4]
+    data_as_dict = cnn_data_prep(dataset=dataset, with_sax=False)
+    run_algo_loop(data=data_as_dict, res_file=res_file, epochs=epochs, filters_init_value=filters_init_value,
+                  kernel_size=kernel_size, drop_out=drop_out, dense_layer_size=dense_layer_size,
+                  lr=lr, layers=layers)
+    #run_algo(data=data_as_dict, ephocs=10, filters_init_value=32, kernel_size=4, drop_out=0.5,
+    #         dense_layer_size=64, lr=0.002, conv_layers=2)
